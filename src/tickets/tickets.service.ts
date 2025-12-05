@@ -44,7 +44,7 @@ export class TicketsService {
       const responseTime = Math.floor((Date.now() - startTime) / 1000);
       ticketData.responseTime = responseTime;
 
-      reply = `✅ Ваш запрос решён автоматически!\n\n${autoSolution}\n\nЕсли проблема останется — просто ответьте в чат, и заявка откроется снова.`;
+      reply = `✅ Ваш запрос решён автоматически! 👌\n\n📋 Инструкция по решению:\n\n${autoSolution}\n\n💡 Если проблема останется — просто ответьте в чат, и заявка откроется снова.`;
       autoSolved = true;
 
       console.log('✅ Авторешение найдено, тикет закрыт');
@@ -61,7 +61,7 @@ export class TicketsService {
 
       ticketData.status = 'in-progress';
 
-      reply = `Ваше обращение получено и передано в отдел "${classification.department}". Специалисты свяжутся с вами в ближайшее время.`;
+      reply = `📨 Ваше обращение получено!\n\n✅ Оно передано в отдел "${classification.department}".\n\n👨‍💼 Специалисты свяжутся с вами в ближайшее время.`;
       
       console.log('✅ Тикет создан, отправлен в отдел');
     }
