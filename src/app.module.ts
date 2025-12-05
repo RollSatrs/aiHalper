@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AiModule } from './ai/ai.module';
+import { TicketsModule } from './tickets/tickets.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -12,6 +14,8 @@ import { AiModule } from './ai/ai.module';
       expandVariables: true,
     }),
     AiModule,
+    TicketsModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

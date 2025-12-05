@@ -23,13 +23,16 @@ export class AiService {
   }
 
   async ask(message: string) {
+    const startTime = Date.now()
+    console.log('📤 Отправка запроса к OpenAI...')
+    
     try {
       const completion = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: 'Ты ИИ-ассистент службы поддержки Казахтелеком. Отвечай дружелюбно и помогай пользователям.',
+            content: 'Ты ИИ-ассистент службы поддержки Казахтелеком. Отвечай дружелюбно, кратко и помогай пользователям. Ответ должен быть не более 2-3 предложений.',
           },
           {
             role: 'user',
@@ -37,8 +40,11 @@ export class AiService {
           },
         ],
         temperature: 0.7,
-        max_tokens: 500,
+        max_tokens: 250, // Уменьшено для более быстрого ответа
       });
+      
+      const responseTime = Date.now() - startTime
+      console.log(`✅ Ответ получен за ${responseTime}мс`)
 
       const reply = completion.choices[0]?.message?.content || 'Извините, не удалось получить ответ.';
 
@@ -46,10 +52,189 @@ export class AiService {
         reply: reply,
       };
     } catch (error) {
-      console.error('OpenAI API Error:', error);
+      console.error('❌ OpenAI API Error:', error);
+      
+      // Детальная информация об ошибке
+      if (error instanceof Error) {
+        console.error('Ошибка:', error.message);
+        if ('response' in error) {
+          console.error('Ответ API:', JSON.stringify(error.response, null, 2));
+        }
+      }
+      
+      // Более понятное сообщение об ошибке
+      let errorMessage = 'Извините, произошла ошибка при обработке вашего запроса.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('401') || error.message.includes('authentication')) {
+          errorMessage = 'Ошибка аутентификации с OpenAI. Проверьте API ключ в файле .env';
+        } else if (error.message.includes('429')) {
+          errorMessage = 'Превышен лимит запросов к OpenAI. Попробуйте позже.';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = 'Ошибка подключения к OpenAI. Проверьте интернет-соединение.';
+        }
+      }
+      
       return {
-        reply: 'Извините, произошла ошибка при обработке вашего запроса. Попробуйте еще раз.',
+        reply: errorMessage + ' Попробуйте еще раз.',
       };
+    }
+  }
+
+  // Классификация заявки
+  async classifyTicket(message: string): Promise<{
+    category: string;
+    department: string;
+    priority: string;
+    is_simple: boolean;
+  }> {
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Ты специалист по классификации заявок службы поддержки Казахтелеком. 
+Проанализируй заявку и определи:
+- category: категорию проблемы (например: "Сеть / Wi-Fi", "Интернет", "Телевидение", "1С", "Общая поддержка")
+- department: в какой отдел направить (например: "IT Support", "Техническая поддержка", "1С Development")
+- priority: приоритет ("Низкий", "Средний", "Высокий")
+- is_simple: является ли проблема типовой и решаемой автоматически (true/false)
+
+Ответь ТОЛЬКО в формате JSON:
+{
+  "category": "...",
+  "department": "...",
+  "priority": "...",
+  "is_simple": true/false
+}`,
+          },
+          {
+            role: 'user',
+            content: `Классифицируй эту заявку: "${message}"`,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 200,
+        response_format: { type: 'json_object' },
+      });
+
+      const content = completion.choices[0]?.message?.content || '{}';
+      let classification;
+      
+      try {
+        // Пытаемся найти JSON в тексте, если он обёрнут в markdown код
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : content;
+        classification = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error('Ошибка парсинга JSON:', parseError);
+        console.error('Содержимое ответа:', content);
+        throw new Error('Не удалось распарсить JSON ответ');
+      }
+
+      return {
+        category: classification.category || 'Общая поддержка',
+        department: classification.department || 'Общий отдел',
+        priority: classification.priority || 'Средний',
+        is_simple: classification.is_simple === true || classification.is_simple === 'true' || classification.is_simple === true,
+      };
+    } catch (error) {
+      console.error('❌ Ошибка классификации:', error);
+      return {
+        category: 'Общая поддержка',
+        department: 'Общий отдел',
+        priority: 'Средний',
+        is_simple: false,
+      };
+    }
+  }
+
+  // Получение авторешения для типовой проблемы
+  async getAutoSolution(message: string, category: string): Promise<string> {
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Ты ИИ-ассистент службы поддержки Казахтелеком. 
+Пользователь обратился с типовой проблемой. Дай пошаговую инструкцию для решения проблемы.
+Ответ должен быть кратким, понятным, с конкретными шагами (пронумерованными).
+Категория проблемы: ${category}`,
+          },
+          {
+            role: 'user',
+            content: `Проблема: "${message}". Дай пошаговую инструкцию для решения.`,
+          },
+        ],
+        temperature: 0.5,
+        max_tokens: 400,
+      });
+
+      return completion.choices[0]?.message?.content || 'Инструкция будет предоставлена специалистом.';
+    } catch (error) {
+      console.error('Ошибка получения авторешения:', error);
+      return 'Мы получили ваше обращение. Специалист свяжется с вами в ближайшее время.';
+    }
+  }
+
+  // Создание summary для сложной проблемы
+  async createSummary(message: string, classification: {
+    category: string;
+    department: string;
+    priority: string;
+  }): Promise<string> {
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'Создай краткое резюме заявки (1-2 предложения) для оператора. Укажи суть проблемы.',
+          },
+          {
+            role: 'user',
+            content: `Заявка: "${message}". Категория: ${classification.category}. Приоритет: ${classification.priority}.`,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 150,
+      });
+
+      return completion.choices[0]?.message?.content || `Проблема: ${message}`;
+    } catch (error) {
+      console.error('Ошибка создания summary:', error);
+      return `Проблема: ${message}. Категория: ${classification.category}`;
+    }
+  }
+
+  // Создание черновика ответа для оператора
+  async createDraftResponse(message: string, summary: string, department: string): Promise<string> {
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Ты помощник оператора службы поддержки Казахтелеком. 
+Создай вежливый черновик ответа для пользователя. 
+Ответ должен начинаться с приветствия, подтверждать получение заявки, указывать что заявка передана в отдел "${department}", и завершаться обещанием помочь в ближайшее время.
+Будь профессиональным и дружелюбным.`,
+          },
+          {
+            role: 'user',
+            content: `Резюме проблемы: "${summary}". Оригинальное обращение: "${message}"`,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 300,
+      });
+
+      return completion.choices[0]?.message?.content || 'Здравствуйте! Мы получили ваше обращение и передали его специалистам. Они свяжутся с вами в ближайшее время.';
+    } catch (error) {
+      console.error('Ошибка создания черновика:', error);
+      return 'Здравствуйте! Мы получили ваше обращение. Специалисты свяжутся с вами в ближайшее время.';
     }
   }
 }
