@@ -22,20 +22,43 @@ const Dashboard = () => {
     return () => clearInterval(interval)
   }, [])
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('authToken')
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+    }
+  }
+
   const loadData = async () => {
     try {
+      const headers = getAuthHeaders()
+
       // Загружаем метрики
-      const metricsResponse = await fetch('http://localhost:3000/api/dashboard')
+      const metricsResponse = await fetch('http://localhost:3000/api/dashboard', {
+        headers,
+      })
       if (metricsResponse.ok) {
         const metricsData = await metricsResponse.json()
         setMetrics(metricsData)
+      } else if (metricsResponse.status === 401) {
+        // Неавторизован - перенаправляем на логин
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('user')
+        window.location.href = '/admin'
       }
 
       // Загружаем сложные тикеты (TODO-лист)
-      const ticketsResponse = await fetch('http://localhost:3000/api/tickets/complex')
+      const ticketsResponse = await fetch('http://localhost:3000/api/tickets/complex', {
+        headers,
+      })
       if (ticketsResponse.ok) {
         const ticketsData = await ticketsResponse.json()
         setComplexTickets(ticketsData)
+      } else if (ticketsResponse.status === 401) {
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('user')
+        window.location.href = '/admin'
       }
     } catch (error) {
       console.error('Ошибка загрузки данных:', error)
@@ -58,9 +81,7 @@ const Dashboard = () => {
     try {
       const response = await fetch(`http://localhost:3000/api/tickets/${ticketId}/draft`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ draftResponse: editedDraft }),
       })
 
@@ -90,6 +111,7 @@ const Dashboard = () => {
       // Закрываем тикет (отправляем ответ)
       const response = await fetch(`http://localhost:3000/api/tickets/${ticket.id}/resolve`, {
         method: 'PUT',
+        headers: getAuthHeaders(),
       })
 
       if (response.ok) {
@@ -115,6 +137,7 @@ const Dashboard = () => {
     try {
       const response = await fetch(`http://localhost:3000/api/tickets/${ticketId}/resolve`, {
         method: 'PUT',
+        headers: getAuthHeaders(),
       })
 
       if (response.ok) {
@@ -232,6 +255,11 @@ const Dashboard = () => {
                 <div className="todo-header">
                   <div className="todo-id">#{ticket.id}</div>
                   <div className="todo-meta">
+                    {ticket.user && (
+                      <span className="todo-user">
+                        👤 {ticket.user.name || ticket.user.email || 'Пользователь'}
+                      </span>
+                    )}
                     <span className="todo-category">{ticket.category}</span>
                     <span className="todo-department">{ticket.department}</span>
                     <span
