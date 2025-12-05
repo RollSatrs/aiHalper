@@ -12,30 +12,30 @@ export class TicketsController {
   }
 
   @Get('complex')
-  getComplexTickets() {
-    return this.ticketsService.getComplexTickets();
+  async getComplexTickets() {
+    return await this.ticketsService.getComplexTickets();
   }
 
   @Patch(':id/draft')
   async updateDraft(@Param('id') id: string, @Body('draftResponse') draftResponse: string) {
-    const success = this.ticketsService.updateDraftResponse(+id, draftResponse);
+    const success = await this.ticketsService.updateDraftResponse(+id, draftResponse);
     return { success, message: success ? 'Черновик обновлен' : 'Тикет не найден' };
   }
 
   @Put(':id/resolve')
   async resolveTicket(@Param('id') id: string) {
-    const success = this.ticketsService.resolveTicket(+id);
+    const success = await this.ticketsService.resolveTicket(+id);
     return { success, message: success ? 'Тикет закрыт' : 'Тикет не найден' };
   }
 
   @Get(':id')
-  getTicketById(@Param('id') id: string) {
-    return this.ticketsService.getTicketById(+id);
+  async getTicketById(@Param('id') id: string) {
+    return await this.ticketsService.getTicketById(+id);
   }
 
   @Get()
-  getAllTickets() {
-    return this.ticketsService.getAllTickets();
+  async getAllTickets() {
+    return await this.ticketsService.getAllTickets();
   }
 }
 

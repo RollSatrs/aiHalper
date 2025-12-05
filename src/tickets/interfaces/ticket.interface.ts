@@ -15,6 +15,11 @@ export interface Ticket {
   resolvedAt?: Date;
   classificationCorrect?: boolean;
   routingError?: boolean;
+  user?: {
+    id: number;
+    name: string;
+    email: string;
+  } | null;
 }
 
 export interface TicketClassification {

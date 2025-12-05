@@ -2,6 +2,7 @@
 /dist
 /node_modules
 /build
+/env
 
 # Logs
 logs
@@ -62,3 +63,7 @@ data/
 !package.json
 !package-lock.json
 !tsconfig.json
+
+# Scripts with secrets (should not be in repo)
+CREATE_ENV.ps1
+SETUP.md

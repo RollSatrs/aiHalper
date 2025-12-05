@@ -31,6 +31,38 @@
 $ pnpm install
 ```
 
+## Настройка переменных окружения
+
+Перед запуском бэкенда необходимо создать файл `.env` в корне папки `aihelper-backend`:
+
+1. Создайте файл `.env` в папке `aihelper-backend`
+2. Добавьте в него следующие переменные:
+
+```env
+DATABASE_URL=postgresql://postgres:12345678@localhost:5432/aiHelper
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+OPENAI_API_KEY=your_openai_api_key
+```
+
+**Где:**
+- `DATABASE_URL` - строка подключения к PostgreSQL (пароль: `12345678`, БД: `aiHelper`)
+- `JWT_SECRET` - секретный ключ для JWT токенов
+- `OPENAI_API_KEY` - ваш ключ OpenAI API
+
+⚠️ **Убедитесь, что база данных `aiHelper` создана в PostgreSQL!**
+
+**Важно:** Никогда не публикуйте файл `.env` в репозиторий! Он уже добавлен в `.gitignore`.
+
+### Настройка базы данных PostgreSQL
+
+Подробные инструкции см. в файлах:
+- `DATABASE_SETUP.md` - полная инструкция по настройке БД
+- `FIX_DATABASE_URL.md` - решение проблем с подключением к БД
+
+### Быстрое решение проблем
+
+Если возникли проблемы, см. `QUICK_FIX.md` для быстрых решений.
+
 ## Compile and run the project
 
 ```bash
