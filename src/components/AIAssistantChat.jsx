@@ -11,8 +11,8 @@ const AIAssistantChat = ({ isOpen, onClose, language = 'ru', onNavigate }) => {
   
   const getInitialMessage = (lang) => {
     return lang === 'ru' 
-      ? 'Здравствуйте! Я ИИ-ассистент службы поддержки Казахтелеком. Чем могу помочь?\n\nЯ могу:\n• Показать панель мониторинга\n• Показать список заявок\n• Помочь создать новую заявку\n• Ответить на ваши вопросы'
-      : 'Сәлеметсіз бе! Мен Қазақтелеком қолдау қызметінің ЖИ көмекшісімін. Қалай көмектесе аламын?\n\nМен:\n• Мониторинг панелін көрсете аламын\n• Өтініштер тізімін көрсете аламын\n• Жаңа өтініш құруға көмектесе аламын\n• Сіздің сұрақтарыңызға жауап бере аламын'
+      ? 'Здравствуйте! Я ИИ-ассистент службы поддержки Казахтелеком. Чем могу помочь?\n\nВыберите режим:\n💬 Задать вопрос - просто спросить у ИИ (без создания заявки)\n📝 Создать заявку - для решения проблемы (простая решается автоматически, сложная отправляется специалистам)'
+      : 'Сәлеметсіз бе! Мен Қазақтелеком қолдау қызметінің ЖИ көмекшісімін. Қалай көмектесе аламын?\n\nРежимді таңдаңыз:\n💬 Сұрақ қою - ЖИ-дан сұрақ (өтінішсіз)\n📝 Өтініш құру - мәселені шешу үшін (қарапайым автошешіледі, күрделі мамандарға жіберіледі)'
   }
   
   const [messages, setMessages] = useState([
@@ -25,6 +25,7 @@ const AIAssistantChat = ({ isOpen, onClose, language = 'ru', onNavigate }) => {
   ])
   const [inputValue, setInputValue] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const [mode, setMode] = useState(null) // 'question' или 'ticket' или null (автоопределение)
   const [showQuickActions, setShowQuickActions] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -109,47 +110,115 @@ const AIAssistantChat = ({ isOpen, onClose, language = 'ru', onNavigate }) => {
       return
     }
 
-    // Для обычных сообщений - отправка запроса к API
-    try {
-      const response = await fetch('http://localhost:3000/ai/ask', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: userInput
-        })
-      })
+    // Определяем режим работы
+    let currentMode = mode
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+    // Автоопределение режима, если не выбран явно
+    if (!currentMode) {
+      const questionKeywords = ['как', 'что', 'почему', 'где', 'когда', 'расскажи', 'объясни', 'вопрос', 'спрашиваю', 'қалай', 'негіз', 'анықта']
+      const ticketKeywords = ['проблема', 'не работает', 'ошибка', 'помогите', 'решить', 'исправить', 'заявка', 'мәселе', 'жұмыс істемейді', 'қате', 'көмектесіңіз']
+
+      const isQuestion = questionKeywords.some(keyword => lowerInput.includes(keyword))
+      const isTicket = ticketKeywords.some(keyword => lowerInput.includes(keyword))
+
+      if (isTicket && !isQuestion) {
+        currentMode = 'ticket'
+      } else {
+        currentMode = 'question' // По умолчанию простой вопрос
+      }
+    }
+
+    // Для обычных сообщений - отправка в зависимости от режима
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+      let response
+      let data
+
+      if (currentMode === 'ticket') {
+        // Режим создания заявки
+        response = await fetch('http://localhost:3000/api/tickets/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: userInput
+          }),
+          signal: controller.signal
+        })
+
+        clearTimeout(timeoutId)
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        data = await response.json()
+        const aiResponse = data.reply || generateAIResponse(userInput)
+
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          text: aiResponse,
+          sender: 'ai',
+          timestamp: new Date()
+        }])
+      } else {
+        // Режим простого вопроса (без создания тикета)
+        response = await fetch('http://localhost:3000/ai/ask', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: userInput
+          }),
+          signal: controller.signal
+        })
+
+        clearTimeout(timeoutId)
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        data = await response.json()
+        const aiResponse = data.reply || generateAIResponse(userInput)
+
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          text: aiResponse,
+          sender: 'ai',
+          timestamp: new Date()
+        }])
       }
 
-      const data = await response.json()
-      const aiResponse = data.reply || generateAIResponse(userInput)
-
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        text: aiResponse,
-        sender: 'ai',
-        timestamp: new Date()
-      }])
       setIsTyping(false)
+      setMode(null) // Сбрасываем режим после использования
     } catch (error) {
       console.error('Ошибка при отправке сообщения:', error)
       
-      // Fallback на локальный ответ при ошибке
-      const aiResponse = language === 'ru'
-        ? 'Извините, произошла ошибка при обработке вашего запроса. Попробуйте еще раз.'
-        : 'Кешіріңіз, сұрауыңызды өңдеу кезінде қате орын алды. Қайталап көріңіз.'
+      setIsTyping(false)
+      
+      // Определяем тип ошибки
+      let errorMessage = ''
+      if (error.name === 'AbortError') {
+        errorMessage = language === 'ru'
+          ? 'Запрос занял слишком много времени. Попробуйте еще раз или упростите вопрос.'
+          : 'Сұрау тым ұзаққа созылды. Қайталап көріңіз немесе сұрақты жеңілдетіңіз.'
+      } else {
+        errorMessage = language === 'ru'
+          ? 'Извините, произошла ошибка при обработке вашего запроса. Попробуйте еще раз.'
+          : 'Кешіріңіз, сұрауыңызды өңдеу кезінде қате орын алды. Қайталап көріңіз.'
+      }
       
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
-        text: aiResponse,
+        text: errorMessage,
         sender: 'ai',
         timestamp: new Date()
       }])
-      setIsTyping(false)
     }
   }
 
@@ -436,24 +505,65 @@ const AIAssistantChat = ({ isOpen, onClose, language = 'ru', onNavigate }) => {
             </div>
 
             <div className="ai-chat-input-container">
-              <textarea
-                ref={inputRef}
-                className="ai-chat-input"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder={language === 'ru' ? 'Напишите ваш вопрос...' : 'Сұрағыңызды жазыңыз...'}
-                rows={1}
-              />
-              <button
-                className="ai-chat-send"
-                onClick={handleSend}
-                disabled={!inputValue.trim() || isTyping}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"/>
-                </svg>
-              </button>
+              {mode && (
+                <div className="mode-indicator">
+                  {mode === 'question' 
+                    ? (language === 'ru' ? '💬 Режим: Простой вопрос' : '💬 Режим: Қарапайым сұрақ')
+                    : (language === 'ru' ? '📝 Режим: Создание заявки' : '📝 Режим: Өтініш құру')
+                  }
+                  <button 
+                    className="mode-clear"
+                    onClick={() => setMode(null)}
+                    title={language === 'ru' ? 'Сбросить режим' : 'Режимді тазалау'}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              
+              <div className="mode-selector">
+                <button
+                  className={`mode-btn ${mode === 'question' ? 'active' : ''}`}
+                  onClick={() => setMode('question')}
+                  title={language === 'ru' ? 'Просто спросить у ИИ (без создания заявки)' : 'ЖИ-дан сұрау (өтінішсіз)'}
+                >
+                  💬 {language === 'ru' ? 'Задать вопрос' : 'Сұрақ қою'}
+                </button>
+                <button
+                  className={`mode-btn ${mode === 'ticket' ? 'active' : ''}`}
+                  onClick={() => setMode('ticket')}
+                  title={language === 'ru' ? 'Создать заявку (простая решается автоматически)' : 'Өтініш құру (қарапайым автошешіледі)'}
+                >
+                  📝 {language === 'ru' ? 'Создать заявку' : 'Өтініш құру'}
+                </button>
+              </div>
+
+              <div className="ai-chat-input-wrapper">
+                <textarea
+                  ref={inputRef}
+                  className="ai-chat-input"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder={
+                    mode === 'question' 
+                      ? (language === 'ru' ? 'Задайте вопрос ИИ...' : 'ЖИ-ға сұрақ қойыңыз...')
+                      : mode === 'ticket'
+                      ? (language === 'ru' ? 'Опишите проблему для создания заявки...' : 'Өтініш құру үшін мәселені сипаттаңыз...')
+                      : (language === 'ru' ? 'Напишите ваш вопрос...' : 'Сұрағыңызды жазыңыз...')
+                  }
+                  rows={1}
+                />
+                <button
+                  className="ai-chat-send"
+                  onClick={handleSend}
+                  disabled={!inputValue.trim() || isTyping}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           </>
         )

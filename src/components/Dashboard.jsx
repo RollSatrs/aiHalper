@@ -4,70 +4,164 @@ import './Dashboard.css'
 const Dashboard = () => {
   const [metrics, setMetrics] = useState({
     totalTickets: 0,
-    autoResolved: 0,
-    inProgress: 0,
-    escalated: 0,
-    avgResponseTime: 0,
+    autoSolved: 0,
+    autoSolvedPercent: 0,
+    avgResponseTime: '0 сек',
     classificationAccuracy: 0,
-    autoResolveRate: 0,
     routingErrors: 0
   })
 
+  const [complexTickets, setComplexTickets] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [editingTicketId, setEditingTicketId] = useState(null)
+  const [editedDraft, setEditedDraft] = useState('')
+
   useEffect(() => {
-    // Имитация загрузки данных
-    const loadMetrics = () => {
-      const tickets = JSON.parse(localStorage.getItem('tickets') || '[]')
-      const autoResolved = tickets.filter(t => t.status === 'auto-resolved').length
-      const inProgress = tickets.filter(t => t.status === 'in-progress').length
-      const escalated = tickets.filter(t => t.escalated).length
-      const total = tickets.length
-      
-      const avgTime = tickets.length > 0
-        ? Math.round(tickets.reduce((sum, t) => sum + (t.responseTime || 0), 0) / tickets.length)
-        : 0
-
-      const accuracy = tickets.length > 0
-        ? Math.round((tickets.filter(t => t.classificationCorrect !== false).length / tickets.length) * 100)
-        : 100
-
-      const autoRate = total > 0 ? Math.round((autoResolved / total) * 100) : 0
-      const errors = tickets.filter(t => t.routingError).length
-
-      setMetrics({
-        totalTickets: total,
-        autoResolved,
-        inProgress,
-        escalated,
-        avgResponseTime: avgTime,
-        classificationAccuracy: accuracy,
-        autoResolveRate: autoRate,
-        routingErrors: errors
-      })
-    }
-
-    loadMetrics()
-    const interval = setInterval(loadMetrics, 5000)
+    loadData()
+    const interval = setInterval(loadData, 5000) // Обновление каждые 5 секунд
     return () => clearInterval(interval)
   }, [])
 
-  const chartData = [
-    { label: 'Авторешение', value: metrics.autoResolved, color: '#10b981' },
-    { label: 'В работе', value: metrics.inProgress, color: '#3b82f6' },
-    { label: 'Эскалировано', value: metrics.escalated, color: '#f59e0b' }
-  ]
+  const loadData = async () => {
+    try {
+      // Загружаем метрики
+      const metricsResponse = await fetch('http://localhost:3000/api/dashboard')
+      if (metricsResponse.ok) {
+        const metricsData = await metricsResponse.json()
+        setMetrics(metricsData)
+      }
 
-  const maxValue = Math.max(...chartData.map(d => d.value), 1)
+      // Загружаем сложные тикеты (TODO-лист)
+      const ticketsResponse = await fetch('http://localhost:3000/api/tickets/complex')
+      if (ticketsResponse.ok) {
+        const ticketsData = await ticketsResponse.json()
+        setComplexTickets(ticketsData)
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки данных:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEditDraft = (ticket) => {
+    setEditingTicketId(ticket.id)
+    setEditedDraft(ticket.draftResponse || '')
+  }
+
+  const handleCancelEdit = () => {
+    setEditingTicketId(null)
+    setEditedDraft('')
+  }
+
+  const handleSaveDraft = async (ticketId) => {
+    try {
+      const response = await fetch(`http://localhost:3000/api/tickets/${ticketId}/draft`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ draftResponse: editedDraft }),
+      })
+
+      if (response.ok) {
+        // Обновляем локальное состояние
+        setComplexTickets(prev => 
+          prev.map(t => t.id === ticketId ? { ...t, draftResponse: editedDraft } : t)
+        )
+        setEditingTicketId(null)
+        setEditedDraft('')
+        alert('Черновик сохранен!')
+      } else {
+        alert('Ошибка при сохранении черновика')
+      }
+    } catch (error) {
+      console.error('Ошибка сохранения черновика:', error)
+      alert('Ошибка при сохранении черновика')
+    }
+  }
+
+  const handleSendResponse = async (ticket) => {
+    if (!confirm('Отправить ответ пользователю и закрыть задачу?')) {
+      return
+    }
+
+    try {
+      // Закрываем тикет (отправляем ответ)
+      const response = await fetch(`http://localhost:3000/api/tickets/${ticket.id}/resolve`, {
+        method: 'PUT',
+      })
+
+      if (response.ok) {
+        // Удаляем из списка сложных задач
+        setComplexTickets(prev => prev.filter(t => t.id !== ticket.id))
+        alert('Ответ отправлен, задача закрыта!')
+        // Перезагружаем данные
+        loadData()
+      } else {
+        alert('Ошибка при отправке ответа')
+      }
+    } catch (error) {
+      console.error('Ошибка отправки ответа:', error)
+      alert('Ошибка при отправке ответа')
+    }
+  }
+
+  const handleCloseTicket = async (ticketId) => {
+    if (!confirm('Закрыть задачу без отправки ответа?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:3000/api/tickets/${ticketId}/resolve`, {
+        method: 'PUT',
+      })
+
+      if (response.ok) {
+        setComplexTickets(prev => prev.filter(t => t.id !== ticketId))
+        alert('Задача закрыта!')
+        loadData()
+      } else {
+        alert('Ошибка при закрытии задачи')
+      }
+    } catch (error) {
+      console.error('Ошибка закрытия задачи:', error)
+      alert('Ошибка при закрытии задачи')
+    }
+  }
+
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'Высокий':
+        return '#ef4444'
+      case 'Средний':
+        return '#f59e0b'
+      case 'Низкий':
+        return '#10b981'
+      default:
+        return '#6b7280'
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="dashboard">
+        <div className="dashboard-loading">Загрузка...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h1>Панель мониторинга ИИ Help Desk</h1>
+        <h1>📋 Панель оператора - TODO-лист сложных задач</h1>
         <div className="dashboard-status">
           <span className="status-indicator active"></span>
           <span>Система работает</span>
         </div>
       </div>
 
+      {/* Метрики */}
       <div className="metrics-grid">
         <div className="metric-card">
           <div className="metric-icon">📊</div>
@@ -81,24 +175,16 @@ const Dashboard = () => {
           <div className="metric-icon">✅</div>
           <div className="metric-content">
             <div className="metric-label">Авторешение</div>
-            <div className="metric-value">{metrics.autoResolved}</div>
-            <div className="metric-percentage">{metrics.autoResolveRate}%</div>
+            <div className="metric-value">{metrics.autoSolved}</div>
+            <div className="metric-percentage">{metrics.autoSolvedPercent}%</div>
           </div>
         </div>
 
         <div className="metric-card info">
-          <div className="metric-icon">⚙️</div>
+          <div className="metric-icon">📋</div>
           <div className="metric-content">
-            <div className="metric-label">В работе</div>
-            <div className="metric-value">{metrics.inProgress}</div>
-          </div>
-        </div>
-
-        <div className="metric-card warning">
-          <div className="metric-icon">⬆️</div>
-          <div className="metric-content">
-            <div className="metric-label">Эскалировано</div>
-            <div className="metric-value">{metrics.escalated}</div>
+            <div className="metric-label">Сложных задач</div>
+            <div className="metric-value">{complexTickets.length}</div>
           </div>
         </div>
 
@@ -106,7 +192,7 @@ const Dashboard = () => {
           <div className="metric-icon">⏱️</div>
           <div className="metric-content">
             <div className="metric-label">Среднее время ответа</div>
-            <div className="metric-value">{metrics.avgResponseTime}с</div>
+            <div className="metric-value">{metrics.avgResponseTime}</div>
           </div>
         </div>
 
@@ -114,15 +200,7 @@ const Dashboard = () => {
           <div className="metric-icon">🎯</div>
           <div className="metric-content">
             <div className="metric-label">Точность классификации</div>
-            <div className="metric-value">{metrics.classificationAccuracy}%</div>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-icon">📈</div>
-          <div className="metric-content">
-            <div className="metric-label">Процент автоответов</div>
-            <div className="metric-value">{metrics.autoResolveRate}%</div>
+            <div className="metric-value">{(metrics.classificationAccuracy * 100).toFixed(0)}%</div>
           </div>
         </div>
 
@@ -135,74 +213,119 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="dashboard-charts">
-        <div className="chart-card">
-          <h3>Распределение заявок</h3>
-          <div className="bar-chart">
-            {chartData.map((item, index) => (
-              <div key={index} className="bar-item">
-                <div className="bar-label">{item.label}</div>
-                <div className="bar-container">
-                  <div
-                    className="bar"
-                    style={{
-                      width: `${(item.value / maxValue) * 100}%`,
-                      backgroundColor: item.color
-                    }}
-                  >
-                    <span className="bar-value">{item.value}</span>
+      {/* TODO-лист сложных задач */}
+      <div className="dashboard-todos">
+        <div className="todos-header">
+          <h2>📝 Сложные задачи, требующие участия специалиста</h2>
+          <span className="todos-count">{complexTickets.length} задач</span>
+        </div>
+
+        {complexTickets.length === 0 ? (
+          <div className="todos-empty">
+            <div className="empty-icon">🎉</div>
+            <p>Все задачи решены! Нет сложных заявок, требующих участия специалиста.</p>
+          </div>
+        ) : (
+          <div className="todos-list">
+            {complexTickets.map((ticket) => (
+              <div key={ticket.id} className="todo-card">
+                <div className="todo-header">
+                  <div className="todo-id">#{ticket.id}</div>
+                  <div className="todo-meta">
+                    <span className="todo-category">{ticket.category}</span>
+                    <span className="todo-department">{ticket.department}</span>
+                    <span
+                      className="todo-priority"
+                      style={{ color: getPriorityColor(ticket.priority) }}
+                    >
+                      {ticket.priority}
+                    </span>
                   </div>
+                  <div className="todo-date">
+                    {new Date(ticket.createdAt).toLocaleString('ru-RU')}
+                  </div>
+                </div>
+
+                <div className="todo-content">
+                  <div className="todo-section">
+                    <h4>📄 Текст заявки:</h4>
+                    <p className="todo-message">{ticket.message}</p>
+                  </div>
+
+                  <div className="todo-section">
+                    <h4>📝 Резюме (Summary):</h4>
+                    <p className="todo-summary">{ticket.summary || 'Резюме готовится...'}</p>
+                  </div>
+
+                  <div className="todo-section">
+                    <h4>✍️ Черновик ответа (от ИИ):</h4>
+                    {editingTicketId === ticket.id ? (
+                      <div className="todo-draft-edit">
+                        <textarea
+                          value={editedDraft}
+                          onChange={(e) => setEditedDraft(e.target.value)}
+                          className="draft-textarea"
+                          rows="5"
+                        />
+                        <div className="draft-actions">
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => handleSaveDraft(ticket.id)}
+                          >
+                            Сохранить
+                          </button>
+                          <button
+                            className="btn btn-secondary"
+                            onClick={handleCancelEdit}
+                          >
+                            Отмена
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="todo-draft">
+                        <p>{ticket.draftResponse || 'Черновик готовится...'}</p>
+                        <button
+                          className="btn btn-link"
+                          onClick={() => handleEditDraft(ticket)}
+                        >
+                          Редактировать
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="todo-actions">
+                  <button
+                    className="btn btn-success"
+                    onClick={() => handleSendResponse(ticket)}
+                    disabled={!ticket.draftResponse}
+                  >
+                    ✅ Отправить ответ
+                  </button>
+                  {editingTicketId !== ticket.id && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleEditDraft(ticket)}
+                    >
+                      ✏️ Редактировать
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => handleCloseTicket(ticket.id)}
+                  >
+                    ❌ Закрыть
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="chart-card">
-          <h3>Статистика за последние 7 дней</h3>
-          <div className="line-chart-placeholder">
-            <div className="chart-line">
-              {[65, 72, 68, 75, 80, 78, 85].map((value, index) => (
-                <div key={index} className="chart-point" style={{ height: `${value}%` }}>
-                  <div className="point-value">{value}%</div>
-                </div>
-              ))}
-            </div>
-            <div className="chart-labels">
-              {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((label, index) => (
-                <span key={index}>{label}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="dashboard-info">
-        <div className="info-card">
-          <h3>🎯 Цель: 50% авторешение</h3>
-          <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${Math.min(metrics.autoResolveRate, 50)}%` }}
-            >
-              {metrics.autoResolveRate}%
-            </div>
-          </div>
-          <p>Текущий показатель: {metrics.autoResolveRate}%</p>
-        </div>
-
-        <div className="info-card">
-          <h3>🤖 Автоматизация 1-й линии</h3>
-          <div className="automation-status">
-            <span className="status-badge success">100%</span>
-            <span>Первая линия полностью автоматизирована</span>
-          </div>
-          <p>0 FTE на первой линии поддержки</p>
-        </div>
+        )}
       </div>
     </div>
   )
 }
 
 export default Dashboard
-
