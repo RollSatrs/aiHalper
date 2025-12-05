@@ -11,16 +11,92 @@ const Dashboard = () => {
     routingErrors: 0
   })
 
+  const [slaMetrics, setSlaMetrics] = useState({
+    slaTarget: 80,
+    slaAchieved: 0,
+    slaStatus: 'meeting',
+    averageResponseTime: '0 сек',
+    autoResolutionRate: 0,
+    classificationAccuracy: '0%',
+    totalProcessed: 0
+  })
+
   const [complexTickets, setComplexTickets] = useState([])
+  const [filteredTickets, setFilteredTickets] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingTicketId, setEditingTicketId] = useState(null)
   const [editedDraft, setEditedDraft] = useState('')
+  
+  // Фильтры и поиск
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterPriority, setFilterPriority] = useState('all')
+  const [filterDepartment, setFilterDepartment] = useState('all')
+  const [filterCategory, setFilterCategory] = useState('all')
+  const [sortBy, setSortBy] = useState('date') // 'date', 'priority', 'department'
+  const [sortOrder, setSortOrder] = useState('desc') // 'asc', 'desc'
 
   useEffect(() => {
     loadData()
     const interval = setInterval(loadData, 5000) // Обновление каждые 5 секунд
     return () => clearInterval(interval)
   }, [])
+
+  // Фильтрация и сортировка тикетов
+  useEffect(() => {
+    let filtered = [...complexTickets]
+
+    // Поиск
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(ticket => 
+        ticket.message.toLowerCase().includes(query) ||
+        ticket.summary?.toLowerCase().includes(query) ||
+        ticket.category.toLowerCase().includes(query) ||
+        ticket.department.toLowerCase().includes(query) ||
+        ticket.user?.name?.toLowerCase().includes(query) ||
+        ticket.user?.email?.toLowerCase().includes(query) ||
+        ticket.id.toString().includes(query)
+      )
+    }
+
+    // Фильтр по приоритету
+    if (filterPriority !== 'all') {
+      filtered = filtered.filter(ticket => ticket.priority === filterPriority)
+    }
+
+    // Фильтр по отделу
+    if (filterDepartment !== 'all') {
+      filtered = filtered.filter(ticket => ticket.department === filterDepartment)
+    }
+
+    // Фильтр по категории
+    if (filterCategory !== 'all') {
+      filtered = filtered.filter(ticket => ticket.category === filterCategory)
+    }
+
+    // Сортировка
+    filtered.sort((a, b) => {
+      let comparison = 0
+      
+      switch (sortBy) {
+        case 'priority':
+          const priorityOrder = { 'Высокий': 3, 'Средний': 2, 'Низкий': 1 }
+          comparison = (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0)
+          break
+        case 'department':
+          comparison = a.department.localeCompare(b.department)
+          break
+        case 'date':
+        default:
+          comparison = new Date(b.createdAt) - new Date(a.createdAt)
+          break
+      }
+      
+      return sortOrder === 'asc' ? -comparison : comparison
+    })
+
+    setFilteredTickets(filtered)
+  }, [complexTickets, searchQuery, filterPriority, filterDepartment, filterCategory, sortBy, sortOrder])
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('authToken')
@@ -48,7 +124,7 @@ const Dashboard = () => {
         window.location.href = '/admin'
       }
 
-      // Загружаем сложные тикеты (TODO-лист)
+      // Загружаем сложные тикеты
       const ticketsResponse = await fetch('http://localhost:3000/api/tickets/complex', {
         headers,
       })
@@ -56,6 +132,19 @@ const Dashboard = () => {
         const ticketsData = await ticketsResponse.json()
         setComplexTickets(ticketsData)
       } else if (ticketsResponse.status === 401) {
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('user')
+        window.location.href = '/admin'
+      }
+
+      // Загружаем SLA метрики
+      const slaResponse = await fetch('http://localhost:3000/api/monitoring/sla', {
+        headers,
+      })
+      if (slaResponse.ok) {
+        const slaData = await slaResponse.json()
+        setSlaMetrics(slaData)
+      } else if (slaResponse.status === 401) {
         localStorage.removeItem('authToken')
         localStorage.removeItem('user')
         window.location.href = '/admin'
@@ -177,7 +266,12 @@ const Dashboard = () => {
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h1>📋 Панель оператора - TODO-лист сложных задач</h1>
+        <div>
+          <h1>📋 Панель оператора</h1>
+          <p style={{ margin: '0.5rem 0 0 0', color: '#6b7280', fontSize: '0.875rem' }}>
+            Удобная обработка сложных заявок с фильтрами и поиском
+          </p>
+        </div>
         <div className="dashboard-status">
           <span className="status-indicator active"></span>
           <span>Система работает</span>
@@ -234,24 +328,126 @@ const Dashboard = () => {
             <div className="metric-value">{metrics.routingErrors}</div>
           </div>
         </div>
+
+        <div className={`metric-card ${slaMetrics.slaStatus === 'meeting' ? 'success' : 'warning'}`}>
+          <div className="metric-icon">🎯</div>
+          <div className="metric-content">
+            <div className="metric-label">SLA: Цель {slaMetrics.slaTarget}%</div>
+            <div className="metric-value">{slaMetrics.slaAchieved}%</div>
+            <div className="metric-percentage">
+              {slaMetrics.slaStatus === 'meeting' ? '✅ Выполняется' : '⚠️ Ниже цели'}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* TODO-лист сложных задач */}
-      <div className="dashboard-todos">
-        <div className="todos-header">
-          <h2>📝 Сложные задачи, требующие участия специалиста</h2>
-          <span className="todos-count">{complexTickets.length} задач</span>
+      {/* Панель фильтров и поиска */}
+      <div className="dashboard-filters">
+        <div className="filters-header">
+          <h2>📋 Заявки для обработки</h2>
+          <span className="tickets-count">
+            Показано: <strong>{filteredTickets.length}</strong> из <strong>{complexTickets.length}</strong>
+          </span>
         </div>
+
+        <div className="filters-toolbar">
+          {/* Поиск */}
+          <div className="search-box">
+            <input
+              type="text"
+              placeholder="🔍 Поиск по тексту, пользователю, ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
+          </div>
+
+          {/* Фильтры */}
+          <div className="filters-group">
+            <select 
+              value={filterPriority} 
+              onChange={(e) => setFilterPriority(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">Все приоритеты</option>
+              <option value="Высокий">Высокий</option>
+              <option value="Средний">Средний</option>
+              <option value="Низкий">Низкий</option>
+            </select>
+
+            <select 
+              value={filterDepartment} 
+              onChange={(e) => setFilterDepartment(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">Все отделы</option>
+              {[...new Set(complexTickets.map(t => t.department))].map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+
+            <select 
+              value={filterCategory} 
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">Все категории</option>
+              {[...new Set(complexTickets.map(t => t.category))].map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+
+            <select 
+              value={`${sortBy}-${sortOrder}`} 
+              onChange={(e) => {
+                const [by, order] = e.target.value.split('-')
+                setSortBy(by)
+                setSortOrder(order)
+              }}
+              className="filter-select"
+            >
+              <option value="date-desc">📅 Новые сначала</option>
+              <option value="date-asc">📅 Старые сначала</option>
+              <option value="priority-desc">🔥 Приоритет: высокий → низкий</option>
+              <option value="priority-asc">🔥 Приоритет: низкий → высокий</option>
+              <option value="department-asc">🏢 Отдел: А-Я</option>
+              <option value="department-desc">🏢 Отдел: Я-А</option>
+            </select>
+
+            {(searchQuery || filterPriority !== 'all' || filterDepartment !== 'all' || filterCategory !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchQuery('')
+                  setFilterPriority('all')
+                  setFilterDepartment('all')
+                  setFilterCategory('all')
+                }}
+                className="btn-clear-filters"
+              >
+                ✖ Сбросить фильтры
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Список заявок */}
+      <div className="dashboard-todos">
 
         {complexTickets.length === 0 ? (
           <div className="todos-empty">
             <div className="empty-icon">🎉</div>
             <p>Все задачи решены! Нет сложных заявок, требующих участия специалиста.</p>
           </div>
+        ) : filteredTickets.length === 0 ? (
+          <div className="todos-empty">
+            <div className="empty-icon">🔍</div>
+            <p>По вашим фильтрам ничего не найдено. Попробуйте изменить параметры поиска.</p>
+          </div>
         ) : (
           <div className="todos-list">
-            {complexTickets.map((ticket) => (
-              <div key={ticket.id} className="todo-card">
+            {filteredTickets.map((ticket) => (
+              <div key={ticket.id} className="todo-card" data-priority={ticket.priority}>
                 <div className="todo-header">
                   <div className="todo-id">#{ticket.id}</div>
                   <div className="todo-meta">
