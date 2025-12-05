@@ -7,6 +7,8 @@ import { AuthModule } from './auth/auth.module';
 import { AiModule } from './ai/ai.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
     AiModule,
     TicketsModule,
     DashboardModule,
+    MonitoringModule,
+    IntegrationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
