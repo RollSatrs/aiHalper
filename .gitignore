@@ -71,3 +71,6 @@ CREATE_ENV.ps1
 SETUP.md
 REMOVE_SECRET.ps1
 FIX_SECRET_QUICK.md
+
+# Example files (safe to commit - no real secrets)
+!.env.example
