@@ -1,0 +1,27 @@
+.tariffs {
+  padding: 4rem 2rem;
+  background: #f3f4f6;
+}
+
+.tariffs-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.tariffs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+}
+
+@media (max-width: 768px) {
+  .tariffs {
+    padding: 2rem 1rem;
+  }
+
+  .tariffs-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
