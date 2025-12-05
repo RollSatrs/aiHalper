@@ -56,31 +56,77 @@ const AIAssistantChat = ({ isOpen, onClose, language = 'ru', onNavigate }) => {
     setInputValue('')
     setIsTyping(true)
 
-    // Имитация ответа ИИ
-    setTimeout(() => {
-      const lowerInput = userInput.toLowerCase()
-      let aiResponse = ''
-      let action = null
+    const lowerInput = userInput.toLowerCase()
 
-      // Определение действия на основе запроса
-      if (lowerInput.includes('dashboard') || lowerInput.includes('панель') || lowerInput.includes('мониторинг') || lowerInput.includes('метрики') || lowerInput.includes('статистика')) {
-        aiResponse = language === 'ru'
-          ? 'Открываю панель мониторинга с метриками и аналитикой...'
-          : 'Мониторинг панелін ашуда...'
-        action = () => setView('dashboard')
-      } else if (lowerInput.includes('заявк') || lowerInput.includes('тикет') || lowerInput.includes('список') || lowerInput.includes('өтініш')) {
-        aiResponse = language === 'ru'
-          ? 'Открываю список заявок...'
-          : 'Өтініштер тізімін ашуда...'
-        action = () => setView('tickets')
-      } else if (lowerInput.includes('создать') || lowerInput.includes('новая') || lowerInput.includes('новая заявка') || lowerInput.includes('құру')) {
-        aiResponse = language === 'ru'
-          ? 'Открываю форму создания заявки...'
-          : 'Өтініш құру формасын ашуда...'
-        action = () => setView('create-ticket')
-      } else {
-        aiResponse = generateAIResponse(userInput)
+    // Определение действия на основе запроса (специальные команды)
+    if (lowerInput.includes('dashboard') || lowerInput.includes('панель') || lowerInput.includes('мониторинг') || lowerInput.includes('метрики') || lowerInput.includes('статистика')) {
+      const aiResponse = language === 'ru'
+        ? 'Открываю панель мониторинга с метриками и аналитикой...'
+        : 'Мониторинг панелін ашуда...'
+      
+      setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          text: aiResponse,
+          sender: 'ai',
+          timestamp: new Date()
+        }])
+        setIsTyping(false)
+        setTimeout(() => setView('dashboard'), 500)
+      }, 1000)
+      return
+    } else if (lowerInput.includes('заявк') || lowerInput.includes('тикет') || lowerInput.includes('список') || lowerInput.includes('өтініш')) {
+      const aiResponse = language === 'ru'
+        ? 'Открываю список заявок...'
+        : 'Өтініштер тізімін ашуда...'
+      
+      setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          text: aiResponse,
+          sender: 'ai',
+          timestamp: new Date()
+        }])
+        setIsTyping(false)
+        setTimeout(() => setView('tickets'), 500)
+      }, 1000)
+      return
+    } else if (lowerInput.includes('создать') || lowerInput.includes('новая') || lowerInput.includes('новая заявка') || lowerInput.includes('құру')) {
+      const aiResponse = language === 'ru'
+        ? 'Открываю форму создания заявки...'
+        : 'Өтініш құру формасын ашуда...'
+      
+      setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          text: aiResponse,
+          sender: 'ai',
+          timestamp: new Date()
+        }])
+        setIsTyping(false)
+        setTimeout(() => setView('create-ticket'), 500)
+      }, 1000)
+      return
+    }
+
+    // Для обычных сообщений - отправка запроса к API
+    try {
+      const response = await fetch('http://localhost:3000/ai/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: userInput
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
+
+      const data = await response.json()
+      const aiResponse = data.reply || generateAIResponse(userInput)
 
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
@@ -89,11 +135,22 @@ const AIAssistantChat = ({ isOpen, onClose, language = 'ru', onNavigate }) => {
         timestamp: new Date()
       }])
       setIsTyping(false)
-
-      if (action) {
-        setTimeout(action, 500)
-      }
-    }, 1000 + Math.random() * 1000)
+    } catch (error) {
+      console.error('Ошибка при отправке сообщения:', error)
+      
+      // Fallback на локальный ответ при ошибке
+      const aiResponse = language === 'ru'
+        ? 'Извините, произошла ошибка при обработке вашего запроса. Попробуйте еще раз.'
+        : 'Кешіріңіз, сұрауыңызды өңдеу кезінде қате орын алды. Қайталап көріңіз.'
+      
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        text: aiResponse,
+        sender: 'ai',
+        timestamp: new Date()
+      }])
+      setIsTyping(false)
+    }
   }
 
   const generateAIResponse = (userInput) => {

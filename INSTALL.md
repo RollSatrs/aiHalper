@@ -1,5 +1,17 @@
 # Установка зависимостей
 
+## Исправление политики выполнения PowerShell (для pnpm)
+
+Если вы получаете ошибку `PSSecurityException` при запуске `pnpm`, выполните эту команду в PowerShell:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+```
+
+Эта команда разрешит выполнение локальных скриптов для вашего пользователя.
+
+---
+
 Из-за проблемы с кодировкой PowerShell (кириллица в пути пользователя), выполните установку вручную:
 
 ## Способ 1: Через CMD (Command Prompt)
