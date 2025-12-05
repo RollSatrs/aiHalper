@@ -1,46 +1,44 @@
-# 🚨 Быстрое решение проблем
+# 🚀 БЫСТРОЕ РЕШЕНИЕ
 
-## Проблема 1: GitHub блокирует push (секрет в истории)
+## Вариант 1: Запустить скрипт (Windows)
 
-**Решение:** Отзовите и замените OpenAI API ключ
-
-1. Откройте https://platform.openai.com/api-keys
-2. Удалите старый ключ (который попал в Git)
-3. Создайте новый ключ
-4. Обновите `.env` файл с новым ключом
-5. Попробуйте снова: `git push origin backend`
-
-Подробнее: см. `FIX_GITHUB_SECRET.md`
+**Просто запустите:**
+```
+fix-git-secret.bat
+```
 
 ---
 
-## Проблема 2: Ошибка "Please provide required params for Postgres driver: url: ''"
+## Вариант 2: Выполнить команды вручную
 
-**Решение:** Добавьте `DATABASE_URL` в `.env` файл
+**В PowerShell в папке `aihelper-backend`:**
 
-1. Откройте файл `aihelper-backend/.env`
-2. Добавьте строку (или обновите существующую):
-   ```
-   DATABASE_URL=postgresql://postgres:12345678@localhost:5432/aiHelper
-   ```
-   ⚠️ **Убедитесь, что база данных `aiHelper` создана в PostgreSQL!**
-4. Если PostgreSQL еще не установлен, установите его или используйте Docker
+```powershell
+# 1. Удалить файлы из истории
+git filter-branch --force --index-filter "git rm --cached --ignore-unmatch CREATE_ENV.ps1 SETUP.md" --prune-empty --tag-name-filter cat -- --all
 
-Подробнее: см. `FIX_DATABASE_URL.md` и `DATABASE_SETUP.md`
+# 2. Очистить кеш
+git reflog expire --expire=now --all
+git gc --prune=now --aggressive
+
+# 3. Force push
+git push origin backend --force
+```
 
 ---
 
-## ✅ Минимальный `.env` файл должен содержать:
+## Вариант 3: Использовать GitHub Allow URL (быстро)
 
-```
-DATABASE_URL=postgresql://postgres:12345678@localhost:5432/aiHelper
-JWT_SECRET=your-super-secret-jwt-key-change-in-production
-OPENAI_API_KEY=sk-proj-...your-new-key-here...
-```
+1. **Перейдите:** https://github.com/RollSatrs/aiHalper/security/secret-scanning/unblock-secret/36QlEHTa3pImUpTQqKLpKuWOofF
+2. **Нажмите:** "Allow secret"
+3. **Затем:** `git push origin backend`
 
-После настройки:
-```bash
-pnpm run db:push  # Применить миграции
-pnpm run start:dev  # Запустить бэкенд
-```
+⚠️ **ВАЖНО:** Отзовите старый ключ и создайте новый!
 
+---
+
+## После исправления:
+
+1. Отзовите старый OpenAI API ключ
+2. Создайте новый ключ
+3. Обновите `.env` файл

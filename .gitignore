@@ -69,3 +69,5 @@ data/
 # Scripts with secrets (should not be in repo)
 CREATE_ENV.ps1
 SETUP.md
+REMOVE_SECRET.ps1
+FIX_SECRET_QUICK.md
