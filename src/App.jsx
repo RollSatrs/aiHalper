@@ -3,7 +3,7 @@ import Header from './components/Header'
 import WelcomePage from './pages/WelcomePage'
 import ClientPage from './pages/ClientPage'
 import AdminPage from './pages/AdminPage'
-import Login from './components/Login'
+import RoleSelection from './components/RoleSelection'
 import './App.css'
 
 function App() {
@@ -145,8 +145,7 @@ function App() {
               currentPage={currentPage}
               onLogout={handleLogout}
               onProfileClick={() => {
-                const event = new CustomEvent('openProfile')
-                window.dispatchEvent(event)
+                window.dispatchEvent(new CustomEvent('openProfile'))
               }}
             />
           )}
@@ -154,7 +153,6 @@ function App() {
             language={language} 
             onLanguageChange={handleLanguageChange}
             isAuthenticated={isAuthenticated && userRole === 'client'}
-            onProfileClick={() => setIsProfileOpen(true)}
           />
         </>
       ) : null}

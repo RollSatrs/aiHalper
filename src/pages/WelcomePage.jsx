@@ -3,7 +3,6 @@ import Hero from '../components/Hero'
 import RoleSelection from '../components/RoleSelection'
 import FAQ from '../components/FAQ'
 import Features from '../components/Features'
-import Tariffs from '../components/Tariffs'
 import './WelcomePage.css'
 
 const WelcomePage = ({ language = 'ru', onRoleSelected }) => {
@@ -11,10 +10,6 @@ const WelcomePage = ({ language = 'ru', onRoleSelected }) => {
 
   const handleLoginClick = () => {
     setShowRoleSelection(true)
-  }
-
-  const handleConnectClick = () => {
-    // Можно открыть модальное окно подключения или оставить пустым
   }
 
   return (
@@ -28,8 +23,6 @@ const WelcomePage = ({ language = 'ru', onRoleSelected }) => {
       <Features language={language} />
 
       <FAQ language={language} />
-
-      <Tariffs onConnectClick={handleConnectClick} language={language} />
 
       {showRoleSelection && (
         <RoleSelection

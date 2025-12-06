@@ -19,6 +19,15 @@ const ClientPage = ({ language, onLanguageChange, isAuthenticated = false }) => 
     return () => clearInterval(interval)
   }, [])
 
+  // Слушаем событие открытия профиля из Header
+  useEffect(() => {
+    const handleOpenProfile = () => {
+      setIsProfileOpen(true)
+    }
+    window.addEventListener('openProfile', handleOpenProfile)
+    return () => window.removeEventListener('openProfile', handleOpenProfile)
+  }, [])
+
   const loadUserTickets = async () => {
     try {
       const token = localStorage.getItem('authToken')
@@ -119,18 +128,23 @@ const ClientPage = ({ language, onLanguageChange, isAuthenticated = false }) => 
                   <div className="block-arrow">→</div>
                 </div>
               </div>
-              <div className="quick-action-block">
+              <div className="quick-action-block" onClick={() => setIsProfileOpen(true)}>
                 <div className="block-content">
                   <div className="block-icon">📊</div>
                   <div className="block-info">
                     <h3>{language === 'ru' ? 'Статистика' : 'Статистика'}</h3>
                     <p>
                       {userTickets.length > 0 
-                        ? `${userTickets.length} ${language === 'ru' ? 'заявок' : 'өтініш'}`
+                        ? <>
+                            <span style={{fontWeight: 'bold', color: '#667eea'}}>{userTickets.length}</span> {language === 'ru' ? 'заявок' : 'өтініш'}
+                            {' • '}
+                            <span style={{color: '#10b981'}}>{userTickets.filter(t => t.status === 'closed_auto' || t.status === 'resolved').length}</span> {language === 'ru' ? 'решено' : 'шешілді'}
+                          </>
                         : language === 'ru' ? 'Нет заявок' : 'Өтініштер жоқ'
                       }
                     </p>
                   </div>
+                  <div className="block-arrow">→</div>
                 </div>
               </div>
             </div>
@@ -142,53 +156,77 @@ const ClientPage = ({ language, onLanguageChange, isAuthenticated = false }) => 
                   {language === 'ru' ? '📋 Последние заявки' : '📋 Соңғы өтініштер'}
                 </h2>
                 <div className="tickets-list-blocks">
-                  {userTickets.slice(0, 3).map((ticket) => (
-                    <div 
-                      key={ticket.id} 
-                      className="ticket-block"
-                      onClick={() => setIsProfileOpen(true)}
-                    >
-                      <div className="ticket-block-header">
-                        <div className="ticket-block-left">
-                          <span className="ticket-id-block">#{ticket.id}</span>
-                          <span className={`ticket-status-block ${ticket.status}`}>
-                            {getStatusLabel(ticket)}
-                          </span>
+                  {userTickets.slice(0, 3).map((ticket) => {
+                    // Безопасное форматирование даты
+                    const formatDate = (dateStr) => {
+                      if (!dateStr) return language === 'ru' ? 'Только что' : 'Жаңа ғана'
+                      try {
+                        const date = new Date(dateStr)
+                        if (isNaN(date.getTime())) return language === 'ru' ? 'Только что' : 'Жаңа ғана'
+                        return date.toLocaleDateString('ru-RU', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      } catch {
+                        return language === 'ru' ? 'Только что' : 'Жаңа ғана'
+                      }
+                    }
+
+                    return (
+                      <div 
+                        key={ticket.id} 
+                        className="ticket-block"
+                        onClick={() => setIsProfileOpen(true)}
+                      >
+                        <div className="ticket-block-header">
+                          <div className="ticket-block-left">
+                            <span className="ticket-id-block">#{ticket.id}</span>
+                            <span className={`ticket-status-block ${ticket.status}`}>
+                              {getStatusLabel(ticket)}
+                            </span>
+                          </div>
+                          <span className="ticket-category-block">{ticket.category || (language === 'ru' ? 'Общая' : 'Жалпы')}</span>
                         </div>
-                        <span className="ticket-category-block">{ticket.category}</span>
-                      </div>
-                      <p className="ticket-message-block">{ticket.message}</p>
-                      {ticket.operatorResponse && (
-                        <div className="ticket-response-block">
-                          <div className="response-label">👨‍💼 {language === 'ru' ? 'Ответ оператора:' : 'Оператордың жауабы:'}</div>
-                          <div className="response-text">{ticket.operatorResponse}</div>
-                        </div>
-                      )}
-                      {ticket.autoSolution && (
-                        <div className="ticket-solution-block">
-                          <div className="solution-label">✅ {language === 'ru' ? 'Решение:' : 'Шешім:'}</div>
-                          <div className="solution-text">{ticket.autoSolution}</div>
-                        </div>
-                      )}
-                      <div className="ticket-block-footer">
-                        <span className="ticket-date-block">
-                          {new Date(ticket.createdAt).toLocaleDateString('ru-RU', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
-                        {ticket.resolvedAt && (
-                          <span className="ticket-resolved-date">
-                            {language === 'ru' ? 'Решено: ' : 'Шешілген: '}
-                            {new Date(ticket.resolvedAt).toLocaleDateString('ru-RU')}
-                          </span>
+                        <p className="ticket-message-block">
+                          {ticket.message 
+                            ? (ticket.message.length > 100 ? ticket.message.substring(0, 100) + '...' : ticket.message)
+                            : (language === 'ru' ? 'Нет описания' : 'Сипаттама жоқ')
+                          }
+                        </p>
+                        {ticket.operatorResponse && (
+                          <div className="ticket-response-block">
+                            <div className="response-label">👨‍💼 {language === 'ru' ? 'Ответ оператора:' : 'Оператордың жауабы:'}</div>
+                            <div className="response-text">{ticket.operatorResponse}</div>
+                          </div>
                         )}
+                        {ticket.autoSolution && (
+                          <div className="ticket-solution-block">
+                            <div className="solution-label">✅ {language === 'ru' ? 'Решение:' : 'Шешім:'}</div>
+                            <div className="solution-text">
+                              {ticket.autoSolution.length > 150 
+                                ? ticket.autoSolution.substring(0, 150) + '...' 
+                                : ticket.autoSolution
+                              }
+                            </div>
+                          </div>
+                        )}
+                        <div className="ticket-block-footer">
+                          <span className="ticket-date-block">
+                            {formatDate(ticket.createdAt)}
+                          </span>
+                          {ticket.resolvedAt && (
+                            <span className="ticket-resolved-date">
+                              {language === 'ru' ? 'Решено: ' : 'Шешілген: '}
+                              {formatDate(ticket.resolvedAt).split(',')[0]}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
                 {userTickets.length > 3 && (
                   <button 
