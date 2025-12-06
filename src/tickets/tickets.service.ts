@@ -193,13 +193,17 @@ export class TicketsService {
   }
 
   async getUserTickets(userId: number) {
-    // Получаем все тикеты пользователя
-    const allTickets = await this.dbService.getAllTickets();
-    const userTickets = allTickets.filter(t => t.userId === userId);
+    // Получаем все тикеты пользователя из БД
+    const allResults = await this.dbService.getAllTickets();
+    
+    // Фильтруем по userId (ticket находится внутри result.ticket)
+    const userResults = allResults.filter(result => result.ticket.userId === userId);
 
     // Также получаем ответы операторов для этих тикетов
     const ticketsWithResponses = await Promise.all(
-      userTickets.map(async (ticket) => {
+      userResults.map(async (result) => {
+        const ticket = result.ticket;
+        
         // Получаем ответ оператора из messages
         const messagesList = await this.dbService.getMessagesByTicketId(ticket.id);
         const operatorResponse = messagesList.find(m => !m.message.isQuestion && m.message.reply)?.message.reply;
@@ -216,7 +220,7 @@ export class TicketsService {
           summary: ticket.summary || undefined,
           draftResponse: ticket.draftResponse || undefined,
           autoSolution: ticket.autoSolution || undefined,
-          operatorResponse: operatorResponse || undefined, // Ответ оператора клиенту
+          operatorResponse: operatorResponse || undefined,
           responseTime: ticket.responseTime || undefined,
           createdAt: ticket.createdAt,
           resolvedAt: ticket.resolvedAt || undefined,
