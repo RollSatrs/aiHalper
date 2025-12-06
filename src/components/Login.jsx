@@ -36,13 +36,10 @@ const Login = ({ onLogin, language = 'ru' }) => {
       localStorage.setItem('authToken', data.access_token)
       localStorage.setItem('user', JSON.stringify(data.user))
 
-      // Вызываем callback для обновления состояния
+      // Вызываем callback для обновления состояния и перенаправления
       if (onLogin) {
         onLogin(data.access_token, data.user)
       }
-
-      // Перенаправляем на админ-панель
-      window.location.href = '/admin'
     } catch (err) {
       setError(err.message || 'Неверный email или пароль')
     } finally {
@@ -78,7 +75,7 @@ const Login = ({ onLogin, language = 'ru' }) => {
               id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder={language === 'ru' ? 'operator@example.com' : 'operator@example.com'}
+              placeholder=""
               required
               disabled={loading}
             />
@@ -93,7 +90,7 @@ const Login = ({ onLogin, language = 'ru' }) => {
               id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={language === 'ru' ? 'Введите пароль' : 'Құпия сөзді енгізіңіз'}
+              placeholder=""
               required
               disabled={loading}
             />

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import Dashboard from '../components/Dashboard'
 import './AdminPage.css'
 
-const AdminPage = ({ language, onNavigate }) => {
+const AdminPage = ({ language, onNavigate, onLogout }) => {
   const [user, setUser] = useState(null)
 
   useEffect(() => {
@@ -14,9 +14,13 @@ const AdminPage = ({ language, onNavigate }) => {
   }, [])
 
   const handleLogout = () => {
-    localStorage.removeItem('authToken')
-    localStorage.removeItem('user')
-    window.location.href = '/admin'
+    if (onLogout) {
+      onLogout()
+    } else {
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('user')
+      window.location.href = '/'
+    }
   }
 
   const handleBackToSite = () => {

@@ -1,7 +1,7 @@
 import { translations } from '../utils/translations'
 import './Hero.css'
 
-const Hero = ({ onConnectClick, language = 'ru', onAIClick }) => {
+const Hero = ({ onConnectClick, language = 'ru', onAIClick, showLoginButton = false }) => {
   const t = translations[language]?.hero || translations.ru.hero
   
   return (
@@ -9,11 +9,20 @@ const Hero = ({ onConnectClick, language = 'ru', onAIClick }) => {
       <div className="hero-container">
         <div className="hero-content">
           <h1 className="hero-title">
-            {t.title}
+            {language === 'ru' 
+              ? 'Общайтесь с ИИ-агентом, дабы ответить на все ваши вопросы и помочь с решением ваших проблем!'
+              : 'Барлық сұрақтарыңызға жауап беру және мәселелеріңізді шешуге көмектесу үшін ЖИ-агентпен байланысыңыз!'
+            }
           </h1>
-          <button className="hero-connect-btn" onClick={onAIClick || onConnectClick}>
-            {t.connectBtn}
-          </button>
+          {showLoginButton ? (
+            <button className="hero-connect-btn" onClick={onAIClick || onConnectClick}>
+              {language === 'ru' ? 'Войти' : 'Кіру'}
+            </button>
+          ) : (
+            <button className="hero-connect-btn" onClick={onAIClick || onConnectClick}>
+              {language === 'ru' ? 'ИИ-ассистент' : 'ЖИ-ассистент'}
+            </button>
+          )}
         </div>
         <div className="hero-visual">
           <img 

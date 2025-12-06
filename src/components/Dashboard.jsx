@@ -192,29 +192,99 @@ const Dashboard = () => {
   }
 
   const handleSendResponse = async (ticket) => {
-    if (!confirm('Отправить ответ пользователю и закрыть задачу?')) {
+    // Используем черновик ответа от ИИ (или отредактированный оператором)
+    const responseText = ticket.draftResponse || 'Ваша заявка обработана. Если нужна дополнительная помощь, создайте новую заявку.'
+    
+    if (!confirm(`Отправить ответ пользователю "${ticket.user?.name || ticket.user?.email || 'клиенту'}" и закрыть задачу?\n\nОтвет: ${responseText.substring(0, 100)}...`)) {
       return
     }
 
     try {
-      // Закрываем тикет (отправляем ответ)
+      // Отправляем ответ оператора клиенту
       const response = await fetch(`http://localhost:3000/api/tickets/${ticket.id}/resolve`, {
         method: 'PUT',
         headers: getAuthHeaders(),
+        body: JSON.stringify({ response: responseText }),
       })
 
       if (response.ok) {
         // Удаляем из списка сложных задач
         setComplexTickets(prev => prev.filter(t => t.id !== ticket.id))
-        alert('Ответ отправлен, задача закрыта!')
         // Перезагружаем данные
         loadData()
+        // Показываем уведомление вместо alert
+        const notification = document.createElement('div')
+        notification.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: #10b981;
+          color: white;
+          padding: 1rem 1.5rem;
+          border-radius: 8px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          z-index: 10000;
+          animation: slideIn 0.3s ease;
+        `
+        notification.innerHTML = `✅ Ответ отправлен клиенту "${ticket.user?.name || ticket.user?.email || 'пользователю'}"`
+        // Добавляем стили для анимации
+        const style = document.createElement('style')
+        style.textContent = `
+          @keyframes slideIn {
+            from {
+              transform: translateX(100%);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+          @keyframes slideOut {
+            from {
+              transform: translateX(0);
+              opacity: 1;
+            }
+            to {
+              transform: translateX(100%);
+              opacity: 0;
+            }
+          }
+        `
+        if (!document.getElementById('notification-styles')) {
+          style.id = 'notification-styles'
+          document.head.appendChild(style)
+        }
+        document.body.appendChild(notification)
+        setTimeout(() => {
+          notification.style.animation = 'slideOut 0.3s ease'
+          setTimeout(() => notification.remove(), 300)
+        }, 3000)
       } else {
-        alert('Ошибка при отправке ответа')
+        const errorText = await response.text()
+        throw new Error(errorText || 'Ошибка при отправке ответа')
       }
     } catch (error) {
       console.error('Ошибка отправки ответа:', error)
-      alert('Ошибка при отправке ответа')
+      const notification = document.createElement('div')
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #ef4444;
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+      `
+      notification.textContent = 'Ошибка при отправке ответа'
+      document.body.appendChild(notification)
+      setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease'
+        setTimeout(() => notification.remove(), 300)
+      }, 3000)
     }
   }
 
@@ -231,7 +301,22 @@ const Dashboard = () => {
 
       if (response.ok) {
         setComplexTickets(prev => prev.filter(t => t.id !== ticketId))
-        alert('Задача закрыта!')
+        // Уведомление вместо alert
+        const notification = document.createElement('div')
+        notification.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: #10b981;
+          color: white;
+          padding: 1rem 1.5rem;
+          border-radius: 8px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          z-index: 10000;
+        `
+        notification.textContent = '✅ Задача закрыта!'
+        document.body.appendChild(notification)
+        setTimeout(() => notification.remove(), 3000)
         loadData()
       } else {
         alert('Ошибка при закрытии задачи')

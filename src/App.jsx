@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import Header from './components/Header'
+import WelcomePage from './pages/WelcomePage'
 import ClientPage from './pages/ClientPage'
 import AdminPage from './pages/AdminPage'
 import Login from './components/Login'
@@ -7,8 +8,9 @@ import './App.css'
 
 function App() {
   const [language, setLanguage] = useState('ru')
-  const [currentPage, setCurrentPage] = useState('client') // 'client' или 'admin'
+  const [currentPage, setCurrentPage] = useState('welcome') // 'welcome', 'client' или 'admin'
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [userRole, setUserRole] = useState(null) // 'client' или 'operator'
   const [checkingAuth, setCheckingAuth] = useState(true)
 
   // Проверяем авторизацию при загрузке
@@ -19,35 +21,48 @@ function App() {
       
       if (!token || !user) {
         setIsAuthenticated(false)
+        setUserRole(null)
+        setCurrentPage('welcome')
         setCheckingAuth(false)
         return
       }
 
-      // Проверяем, что пользователь - оператор
       try {
         const userData = JSON.parse(user)
-        if (userData.role === 'operator') {
-          // Проверяем валидность токена на сервере
-          const response = await fetch('http://localhost:3000/api/auth/me', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          })
+        const role = userData.role
 
-          if (response.ok) {
-            setIsAuthenticated(true)
+        // Проверяем валидность токена на сервере
+        const response = await fetch('http://localhost:3000/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+
+        if (response.ok) {
+          setIsAuthenticated(true)
+          setUserRole(role)
+          
+          // Автоматически перенаправляем на нужную страницу
+          if (role === 'operator') {
+            setCurrentPage('admin')
+          } else if (role === 'client') {
+            setCurrentPage('client')
           } else {
-            // Токен невалиден
-            localStorage.removeItem('authToken')
-            localStorage.removeItem('user')
-            setIsAuthenticated(false)
+            setCurrentPage('welcome')
           }
         } else {
+          // Токен невалиден
+          localStorage.removeItem('authToken')
+          localStorage.removeItem('user')
           setIsAuthenticated(false)
+          setUserRole(null)
+          setCurrentPage('welcome')
         }
       } catch (error) {
         console.error('Ошибка проверки авторизации:', error)
         setIsAuthenticated(false)
+        setUserRole(null)
+        setCurrentPage('welcome')
       } finally {
         setCheckingAuth(false)
       }
@@ -56,52 +71,36 @@ function App() {
     checkAuth()
   }, [])
 
-  // Проверяем URL для определения страницы
-  useEffect(() => {
-    const path = window.location.pathname
-    if (path === '/admin' || path === '/admin/') {
+  // Обработка выбора роли и перенаправления
+  const handleRoleSelected = (role, user, token) => {
+    setIsAuthenticated(true)
+    setUserRole(role)
+    
+    if (role === 'operator') {
       setCurrentPage('admin')
-    } else {
-      setCurrentPage('client')
-    }
-  }, [])
-
-  // Обновляем URL при смене страницы
-  const navigateToPage = (page) => {
-    setCurrentPage(page)
-    if (page === 'admin') {
       window.history.pushState({}, '', '/admin')
-    } else {
+    } else if (role === 'client') {
+      setCurrentPage('client')
       window.history.pushState({}, '', '/')
     }
   }
 
-  // Обработка навигации через кнопку "назад"
-  useEffect(() => {
-    const handlePopState = () => {
-      const path = window.location.pathname
-      if (path === '/admin' || path === '/admin/') {
-        setCurrentPage('admin')
-      } else {
-        setCurrentPage('client')
-      }
-    }
-
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
+  // Обработка выхода
+  const handleLogout = () => {
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('user')
+    setIsAuthenticated(false)
+    setUserRole(null)
+    setCurrentPage('welcome')
+    window.history.pushState({}, '', '/')
+  }
 
   const handleLanguageChange = (lang) => {
     setLanguage(lang)
   }
 
-  const handleLogin = (token, user) => {
-    setIsAuthenticated(true)
-    setCurrentPage('admin')
-  }
-
   // Показываем загрузку пока проверяем авторизацию
-  if (checkingAuth && currentPage === 'admin') {
+  if (checkingAuth) {
     return (
       <div className="app">
         <div style={{ 
@@ -120,32 +119,45 @@ function App() {
 
   return (
     <div className="app">
-      {currentPage !== 'admin' && (
-        <Header 
-          language={language} 
-          onLanguageChange={handleLanguageChange}
-          currentPage={currentPage}
-          onNavigate={navigateToPage}
+      {currentPage === 'welcome' ? (
+        <WelcomePage 
+          language={language}
+          onRoleSelected={handleRoleSelected}
         />
-      )}
-      {currentPage === 'admin' ? (
-        isAuthenticated ? (
+      ) : currentPage === 'admin' ? (
+        isAuthenticated && userRole === 'operator' ? (
           <AdminPage 
-            language={language} 
-            onNavigate={navigateToPage}
+            language={language}
+            onLogout={handleLogout}
           />
         ) : (
-          <Login 
+          <RoleSelection
             language={language}
-            onLogin={handleLogin}
+            onRoleSelected={handleRoleSelected}
           />
         )
-      ) : (
-        <ClientPage 
-          language={language} 
-          onLanguageChange={handleLanguageChange}
-        />
-      )}
+      ) : currentPage === 'client' ? (
+        <>
+          {isAuthenticated && userRole === 'client' && (
+            <Header 
+              language={language} 
+              onLanguageChange={handleLanguageChange}
+              currentPage={currentPage}
+              onLogout={handleLogout}
+              onProfileClick={() => {
+                const event = new CustomEvent('openProfile')
+                window.dispatchEvent(event)
+              }}
+            />
+          )}
+          <ClientPage 
+            language={language} 
+            onLanguageChange={handleLanguageChange}
+            isAuthenticated={isAuthenticated && userRole === 'client'}
+            onProfileClick={() => setIsProfileOpen(true)}
+          />
+        </>
+      ) : null}
     </div>
   )
 }

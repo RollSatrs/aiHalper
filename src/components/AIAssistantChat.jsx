@@ -138,10 +138,20 @@ const AIAssistantChat = ({ isOpen, onClose, language = 'ru', onNavigate }) => {
 
       if (currentMode === 'ticket') {
         // Режим создания заявки
+        // Получаем токен авторизации, если пользователь авторизован
+        const token = localStorage.getItem('authToken')
+        const headers = {
+          'Content-Type': 'application/json',
+        }
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`
+        }
+
         response = await fetch('http://localhost:3000/api/tickets/create', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...headers,
           },
           body: JSON.stringify({
             message: userInput

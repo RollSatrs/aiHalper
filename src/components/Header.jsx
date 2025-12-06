@@ -1,12 +1,49 @@
 import { useState, useEffect, useRef } from 'react'
 import { translations } from '../utils/translations'
+import ClientLogin from './ClientLogin'
 import './Header.css'
 
-const Header = ({ language = 'ru', onLanguageChange, currentPage = 'client', onNavigate }) => {
+const Header = ({ language = 'ru', onLanguageChange, currentPage = 'client', onNavigate, onLoginClick, onProfileClick, user: userProp }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [showLangMenu, setShowLangMenu] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [user, setUser] = useState(null)
+  const [showLoginModal, setShowLoginModal] = useState(false)
   const langMenuRef = useRef(null)
   const t = translations[language]?.header || translations.ru.header
+
+  // Проверяем авторизацию при загрузке и при изменении
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem('authToken')
+      const userData = localStorage.getItem('user')
+      if (token && userData) {
+        try {
+          const parsedUser = JSON.parse(userData)
+          setIsLoggedIn(true)
+          // Используем user из пропсов, если передан, иначе из localStorage
+          setUser(userProp || parsedUser)
+        } catch (e) {
+          setIsLoggedIn(false)
+          setUser(null)
+        }
+      } else {
+        setIsLoggedIn(false)
+        setUser(null)
+      }
+    }
+
+    checkAuth()
+    // Слушаем изменения в localStorage (при логине/логауте)
+    window.addEventListener('storage', checkAuth)
+    // Проверяем каждую секунду (для синхронизации между вкладками)
+    const interval = setInterval(checkAuth, 1000)
+
+    return () => {
+      window.removeEventListener('storage', checkAuth)
+      clearInterval(interval)
+    }
+  }, [userProp])
 
   const handleLanguageSelect = (lang) => {
     if (onLanguageChange) {
@@ -48,22 +85,6 @@ const Header = ({ language = 'ru', onLanguageChange, currentPage = 'client', onN
         </div>
 
         <div className="header-right">
-          <div className="contact-info">
-            <div className="contact-item">
-              <span className="contact-label">{t.phoneLabel}</span>
-              <a href={`tel:${t.phone.replace(/\s/g, '')}`} className="contact-phone">{t.phone}</a>
-            </div>
-            <button className="whatsapp-btn" disabled style={{ cursor: 'not-allowed', opacity: 0.6 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-              </svg>
-              {t.write}
-            </button>
-          </div>
-          <div className="support-info">
-            <span className="support-label">{t.supportLabel}</span>
-            <a href="tel:160" className="support-phone">{t.support}</a>
-          </div>
           <div className="language-selector" ref={langMenuRef}>
             <button 
               className="language-btn" 
@@ -99,6 +120,61 @@ const Header = ({ language = 'ru', onLanguageChange, currentPage = 'client', onN
               </div>
             )}
           </div>
+          {!isLoggedIn ? (
+            <button 
+              className="login-btn"
+              onClick={() => {
+                if (onLoginClick) {
+                  onLoginClick()
+                } else {
+                  setShowLoginModal(true)
+                }
+              }}
+              title={language === 'ru' ? 'Войти в систему' : 'Жүйеге кіру'}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" strokeLinecap="round" strokeLinejoin="round"/>
+                <polyline points="10 17 15 12 10 7" strokeLinecap="round" strokeLinejoin="round"/>
+                <line x1="15" y1="12" x2="3" y2="12" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {language === 'ru' ? 'Войти' : 'Кіру'}
+            </button>
+          ) : (
+            <div className="user-menu">
+              <button 
+                className="profile-btn"
+                onClick={() => {
+                  if (onProfileClick) {
+                    onProfileClick()
+                  }
+                }}
+                title={language === 'ru' ? 'Профиль и заявки' : 'Профиль және өтініштер'}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="12" cy="7" r="4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span className="user-name">{user?.name || user?.email}</span>
+              </button>
+              <button 
+                className="logout-btn"
+                onClick={() => {
+                  localStorage.removeItem('authToken')
+                  localStorage.removeItem('user')
+                  setIsLoggedIn(false)
+                  setUser(null)
+                  window.location.reload()
+                }}
+                title={language === 'ru' ? 'Выйти' : 'Шығу'}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round"/>
+                  <polyline points="16 17 21 12 16 7" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          )}
           {currentPage === 'client' && onNavigate && (
             <button 
               className="admin-btn"
@@ -118,6 +194,20 @@ const Header = ({ language = 'ru', onLanguageChange, currentPage = 'client', onN
           </button>
         </div>
       </div>
+
+      {showLoginModal && (
+        <ClientLogin
+          onClose={() => setShowLoginModal(false)}
+          onSuccess={(user, token) => {
+            setIsLoggedIn(true)
+            setUser(user)
+            setShowLoginModal(false)
+            // Обновляем страницу чтобы применить изменения
+            window.location.reload()
+          }}
+          language={language}
+        />
+      )}
     </header>
   )
 }

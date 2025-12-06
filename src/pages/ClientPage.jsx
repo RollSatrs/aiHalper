@@ -2,15 +2,15 @@ import { useState, useEffect } from 'react'
 import Hero from '../components/Hero'
 import AIAssistantButton from '../components/AIAssistantButton'
 import AIAssistantChat from '../components/AIAssistantChat'
-import MatrixAnimation from '../components/MatrixAnimation'
-import Tariffs from '../components/Tariffs'
+import UserProfile from '../components/UserProfile'
 import Modal from '../components/Modal'
 import './ClientPage.css'
 
-const ClientPage = ({ language, onLanguageChange }) => {
+const ClientPage = ({ language, onLanguageChange, isAuthenticated = false }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedTariff, setSelectedTariff] = useState(null)
   const [isAIChatOpen, setIsAIChatOpen] = useState(false)
+  const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [userTickets, setUserTickets] = useState([])
 
   useEffect(() => {
@@ -21,11 +21,28 @@ const ClientPage = ({ language, onLanguageChange }) => {
 
   const loadUserTickets = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/tickets')
+      const token = localStorage.getItem('authToken')
+      if (!token) {
+        setUserTickets([])
+        return
+      }
+
+      // Загружаем тикеты авторизованного пользователя
+      const response = await fetch('http://localhost:3000/api/tickets/my', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
       if (response.ok) {
         const tickets = await response.json()
         // Показываем только последние 5 заявок пользователя
         setUserTickets(tickets.slice(-5).reverse())
+      } else if (response.status === 401) {
+        // Не авторизован
+        setUserTickets([])
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('user')
       }
     } catch (error) {
       console.error('Ошибка загрузки заявок:', error)
@@ -70,58 +87,149 @@ const ClientPage = ({ language, onLanguageChange }) => {
         onConnectClick={() => handleConnectClick()} 
         onAIClick={handleOpenAIChat}
       />
-      <MatrixAnimation />
       
-      {/* История обращений */}
-      {userTickets.length > 0 && (
-        <div className="client-tickets-section">
+      {/* Кнопка чата показывается только если пользователь авторизован */}
+      {isAuthenticated && (
+        <AIAssistantButton onOpen={handleOpenAIChat} language={language} />
+      )}
+
+      {/* Основной контент для авторизованных клиентов */}
+      {isAuthenticated && (
+        <div className="client-main-content">
           <div className="container">
-            <h2 className="section-title">
-              {language === 'ru' ? '📋 История ваших обращений' : '📋 Сіздің өтініштер тарихы'}
-            </h2>
-            <div className="tickets-grid">
-              {userTickets.map((ticket) => (
-                <div key={ticket.id} className="ticket-card">
-                  <div className="ticket-header">
-                    <span className="ticket-id">#{ticket.id}</span>
-                    <span className={`ticket-status ${ticket.status}`}>
-                      {getStatusLabel(ticket)}
-                    </span>
+            {/* Быстрые действия - блоки */}
+            <div className="quick-actions-blocks">
+              <div className="quick-action-block" onClick={() => setIsProfileOpen(true)}>
+                <div className="block-content">
+                  <div className="block-icon">📋</div>
+                  <div className="block-info">
+                    <h3>{language === 'ru' ? 'Мои заявки' : 'Менің өтініштерім'}</h3>
+                    <p>{language === 'ru' ? 'Просмотр всех обращений' : 'Барлық өтініштерді қарау'}</p>
                   </div>
-                  <p className="ticket-message">
-                    {ticket.message.length > 100 
-                      ? ticket.message.substring(0, 100) + '...' 
-                      : ticket.message}
-                  </p>
-                  <div className="ticket-meta">
-                    <span className="ticket-category">{ticket.category}</span>
-                    <span className="ticket-date">
-                      {new Date(ticket.createdAt).toLocaleDateString('ru-RU')}
-                    </span>
-                  </div>
-                  {ticket.autoSolved && ticket.autoSolution && (
-                    <div className="ticket-solution">
-                      <strong>
-                        {language === 'ru' ? 'Решение:' : 'Шешім:'}
-                      </strong>
-                      <p>{ticket.autoSolution.substring(0, 150)}...</p>
-                    </div>
-                  )}
+                  <div className="block-arrow">→</div>
                 </div>
-              ))}
+              </div>
+              <div className="quick-action-block" onClick={handleOpenAIChat}>
+                <div className="block-content">
+                  <div className="block-icon">💬</div>
+                  <div className="block-info">
+                    <h3>{language === 'ru' ? 'Новая заявка' : 'Жаңа өтініш'}</h3>
+                    <p>{language === 'ru' ? 'Создать обращение' : 'Өтініш құру'}</p>
+                  </div>
+                  <div className="block-arrow">→</div>
+                </div>
+              </div>
+              <div className="quick-action-block">
+                <div className="block-content">
+                  <div className="block-icon">📊</div>
+                  <div className="block-info">
+                    <h3>{language === 'ru' ? 'Статистика' : 'Статистика'}</h3>
+                    <p>
+                      {userTickets.length > 0 
+                        ? `${userTickets.length} ${language === 'ru' ? 'заявок' : 'өтініш'}`
+                        : language === 'ru' ? 'Нет заявок' : 'Өтініштер жоқ'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            {/* История обращений (если есть) */}
+            {userTickets.length > 0 && (
+              <div className="recent-tickets">
+                <h2 className="section-title">
+                  {language === 'ru' ? '📋 Последние заявки' : '📋 Соңғы өтініштер'}
+                </h2>
+                <div className="tickets-list-blocks">
+                  {userTickets.slice(0, 3).map((ticket) => (
+                    <div 
+                      key={ticket.id} 
+                      className="ticket-block"
+                      onClick={() => setIsProfileOpen(true)}
+                    >
+                      <div className="ticket-block-header">
+                        <div className="ticket-block-left">
+                          <span className="ticket-id-block">#{ticket.id}</span>
+                          <span className={`ticket-status-block ${ticket.status}`}>
+                            {getStatusLabel(ticket)}
+                          </span>
+                        </div>
+                        <span className="ticket-category-block">{ticket.category}</span>
+                      </div>
+                      <p className="ticket-message-block">{ticket.message}</p>
+                      {ticket.operatorResponse && (
+                        <div className="ticket-response-block">
+                          <div className="response-label">👨‍💼 {language === 'ru' ? 'Ответ оператора:' : 'Оператордың жауабы:'}</div>
+                          <div className="response-text">{ticket.operatorResponse}</div>
+                        </div>
+                      )}
+                      {ticket.autoSolution && (
+                        <div className="ticket-solution-block">
+                          <div className="solution-label">✅ {language === 'ru' ? 'Решение:' : 'Шешім:'}</div>
+                          <div className="solution-text">{ticket.autoSolution}</div>
+                        </div>
+                      )}
+                      <div className="ticket-block-footer">
+                        <span className="ticket-date-block">
+                          {new Date(ticket.createdAt).toLocaleDateString('ru-RU', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                        {ticket.resolvedAt && (
+                          <span className="ticket-resolved-date">
+                            {language === 'ru' ? 'Решено: ' : 'Шешілген: '}
+                            {new Date(ticket.resolvedAt).toLocaleDateString('ru-RU')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {userTickets.length > 3 && (
+                  <button 
+                    className="view-all-btn"
+                    onClick={() => setIsProfileOpen(true)}
+                  >
+                    {language === 'ru' ? 'Посмотреть все заявки →' : 'Барлық өтініштерді қарау →'}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Пустое состояние */}
+            {userTickets.length === 0 && (
+              <div className="empty-state">
+                <div className="empty-state-icon">📝</div>
+                <h3>{language === 'ru' ? 'У вас пока нет заявок' : 'Сізде әлі өтініштер жоқ'}</h3>
+                <p>
+                  {language === 'ru' 
+                    ? 'Создайте первую заявку через чат с ИИ-ассистентом'
+                    : 'ЖИ-көмекшімен чат арқылы алғашқы өтінішті құрыңыз'
+                  }
+                </p>
+                <button className="create-ticket-btn" onClick={handleOpenAIChat}>
+                  {language === 'ru' ? 'Создать заявку' : 'Өтініш құру'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
-
-      <Tariffs onConnectClick={handleConnectClick} language={language} />
-      
-      <AIAssistantButton onOpen={handleOpenAIChat} />
       <AIAssistantChat 
         isOpen={isAIChatOpen} 
         onClose={handleCloseAIChat} 
         language={language}
         onTicketCreated={loadUserTickets}
+      />
+      <UserProfile
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        language={language}
       />
       <Modal
         isOpen={isModalOpen}
