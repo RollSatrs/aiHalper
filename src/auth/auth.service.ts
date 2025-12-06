@@ -17,7 +17,9 @@ export class AuthService {
   ) {}
 
   async register(registerDto: RegisterDto) {
-    const { name, email, password, role = 'client' } = registerDto;
+    const { name, email, password } = registerDto;
+    // Всегда создаем клиентов через регистрацию
+    const role = 'client';
 
     // Проверяем, существует ли пользователь
     const existingUser = await this.db

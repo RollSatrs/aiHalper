@@ -13,10 +13,20 @@ export class TicketsService {
   async createTicket(message: string, userId?: number | null): Promise<CreateTicketResponse> {
     const startTime = Date.now();
 
-    // Шаг 1: Классификация через OpenAI
-    console.log('🔍 Классификация заявки...');
+    // Шаг 1: Автоматическая классификация и маршрутизация через OpenAI
+    console.log('🔍 [АВТОМАТИЧЕСКАЯ КЛАССИФИКАЦИЯ] Начинаю анализ заявки...');
+    const classificationStartTime = Date.now();
     const classification = await this.aiService.classifyTicket(message);
-    console.log('✅ Классификация:', classification);
+    const classificationTime = Date.now() - classificationStartTime;
+    
+    console.log('✅ [КЛАССИФИКАЦИЯ ЗАВЕРШЕНА]', {
+      category: classification.category,
+      department: classification.department,
+      priority: classification.priority,
+      isSimple: classification.is_simple,
+      time: `${classificationTime}ms`
+    });
+    console.log('📤 [АВТОМАТИЧЕСКАЯ МАРШРУТИЗАЦИЯ] Направление в отдел:', classification.department);
 
     let reply = '';
     let autoSolved = false;
@@ -47,7 +57,7 @@ export class TicketsService {
       reply = `✅ Ваш запрос решён автоматически! 👌\n\n📋 Инструкция по решению:\n\n${autoSolution}\n\n💡 Если проблема останется — просто ответьте в чат, и заявка откроется снова.`;
       autoSolved = true;
 
-      console.log('✅ Авторешение найдено, тикет закрыт');
+      console.log('✅ [АВТОРЕШЕНИЕ] Типовая проблема решена автоматически, тикет закрыт');
     } else {
       console.log('📋 Проблема сложная - создаем summary и черновик...');
       
@@ -61,9 +71,9 @@ export class TicketsService {
 
       ticketData.status = 'in-progress';
 
-      reply = `📨 Ваше обращение получено!\n\n✅ Оно передано в отдел "${classification.department}".\n\n👨‍💼 Специалисты свяжутся с вами в ближайшее время.`;
+      reply = `📨 Ваше обращение получено!\n\n✅ Автоматически классифицировано:\n   📋 Категория: ${classification.category}\n   🏢 Отдел: ${classification.department}\n   🔥 Приоритет: ${classification.priority}\n\n📤 Заявка автоматически направлена в отдел "${classification.department}".\n\n👨‍💼 Специалисты свяжутся с вами в ближайшее время.`;
       
-      console.log('✅ Тикет создан, отправлен в отдел');
+      console.log('✅ [МАРШРУТИЗАЦИЯ ЗАВЕРШЕНА] Тикет создан и отправлен в отдел:', classification.department);
     }
 
     // Сохраняем тикет в PostgreSQL
@@ -148,12 +158,73 @@ export class TicketsService {
     return !!updated;
   }
 
-  async resolveTicket(id: number) {
+  async resolveTicket(id: number, operatorResponse?: string) {
+    // Получаем тикет с информацией о пользователе
+    const ticketResult = await this.dbService.getTicketById(id);
+    if (!ticketResult || !ticketResult.ticket) {
+      return false;
+    }
+
+    const ticket = ticketResult.ticket;
+    const userId = ticket.userId;
+
+    // Обновляем статус тикета
     const updated = await this.dbService.updateTicket(id, {
       status: 'resolved',
       resolvedAt: new Date(),
     });
+
+    // Если есть ответ оператора и userId, сохраняем ответ для отправки клиенту
+    if (operatorResponse && userId) {
+      await this.dbService.createMessage({
+        userId: userId,
+        ticketId: id,
+        message: '', // Оператор не задает вопрос, только отвечает
+        reply: operatorResponse, // Ответ оператора клиенту
+        isQuestion: false,
+        isTicketCreated: false,
+      });
+
+      console.log(`📤 [ОТПРАВКА КЛИЕНТУ] Ответ отправлен пользователю #${userId} для тикета #${id}`);
+      console.log(`   Пользователь: ${ticketResult.user?.name || ticketResult.user?.email || 'Неизвестен'}`);
+    }
+
     return !!updated;
+  }
+
+  async getUserTickets(userId: number) {
+    // Получаем все тикеты пользователя
+    const allTickets = await this.dbService.getAllTickets();
+    const userTickets = allTickets.filter(t => t.userId === userId);
+
+    // Также получаем ответы операторов для этих тикетов
+    const ticketsWithResponses = await Promise.all(
+      userTickets.map(async (ticket) => {
+        // Получаем ответ оператора из messages
+        const messagesList = await this.dbService.getMessagesByTicketId(ticket.id);
+        const operatorResponse = messagesList.find(m => !m.message.isQuestion && m.message.reply)?.message.reply;
+
+        return {
+          id: ticket.id,
+          message: ticket.message,
+          category: ticket.category,
+          department: ticket.department,
+          priority: ticket.priority,
+          is_simple: ticket.isSimple,
+          status: ticket.status,
+          autoSolved: ticket.autoSolved,
+          summary: ticket.summary || undefined,
+          draftResponse: ticket.draftResponse || undefined,
+          autoSolution: ticket.autoSolution || undefined,
+          operatorResponse: operatorResponse || undefined, // Ответ оператора клиенту
+          responseTime: ticket.responseTime || undefined,
+          createdAt: ticket.createdAt,
+          resolvedAt: ticket.resolvedAt || undefined,
+        };
+      })
+    );
+
+    return ticketsWithResponses;
   }
 
   async getDashboardMetrics() {
